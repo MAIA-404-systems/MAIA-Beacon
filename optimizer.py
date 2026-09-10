@@ -4,11 +4,67 @@ Calculates optimal GPU layer offloading and KV cache quantization based on avail
 """
 
 import os
+from pathlib import Path
 import struct
 import subprocess
+from typing import Optional, Union
+
+# Load environment variables from .env file if available
+ROOT_DIR = Path(__file__).resolve().parent
+ENV_PATH = ROOT_DIR / ".env"
+
+
+def load_env() -> None:
+    if not ENV_PATH.exists():
+        return
+    try:
+        with open(ENV_PATH, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                k, v = line.split("=", 1)
+                os.environ.setdefault(k.strip(), v.strip())
+    except Exception:
+        pass
+
+
+load_env()
 
 # Default margin in MiB left free for OS & display
 DEFAULT_VRAM_MARGIN = 500
+# Default max VRAM usage ratio (95% safety default)
+DEFAULT_MAX_VRAM_RATIO = 0.95
+
+
+def get_max_vram_ratio() -> float:
+    """
+    Returns the maximum allowable VRAM usage ratio (e.g., 0.95 for 95%).
+    Parsed from MAX_VRAM_PERCENT (or MAX_VRAM_USAGE). Defaults to 0.95 (95%) if empty, missing, or invalid.
+    Supports formats: "95%", "95", "0.95", etc.
+    """
+    raw = os.getenv("MAX_VRAM_PERCENT", os.getenv("MAX_VRAM_USAGE", ""))
+    if raw is None:
+        return DEFAULT_MAX_VRAM_RATIO
+    raw_str = str(raw).strip()
+    if not raw_str:
+        return DEFAULT_MAX_VRAM_RATIO
+
+    has_percent = "%" in raw_str
+    cleaned = raw_str.replace("%", "").strip().strip("'\"")
+    if not cleaned:
+        return DEFAULT_MAX_VRAM_RATIO
+
+    try:
+        val = float(cleaned)
+        if has_percent or val > 1.0:
+            ratio = val / 100.0
+        else:
+            ratio = val
+        # Clamp ratio between 0.10 (10%) and 1.0 (100%)
+        return max(0.10, min(1.0, ratio))
+    except (ValueError, TypeError):
+        return DEFAULT_MAX_VRAM_RATIO
 
 
 def read_gguf_metadata(file_path: str):
@@ -139,21 +195,46 @@ def simulate_vram_and_speed(props: dict, ngl: int, ncmoe: int, cache_bytes: floa
     return total_gpu_vram, speed
 
 
-def find_optimal_config(model_path: str, target_ctx: int, vram_margin: int = DEFAULT_VRAM_MARGIN, mmproj_path: str = None):
+def find_optimal_config(
+    model_path: str,
+    target_ctx: int,
+    max_vram_ratio: Optional[Union[float, int]] = None,
+    mmproj_path: Optional[str] = None,
+    vram_margin: Optional[int] = None
+):
     """Finds the optimal settings using mathematical simulation."""
     props = extract_model_properties(model_path)
     if not props:
         return None
 
+    # Handle backward compatibility if 3rd positional argument was vram_margin (e.g. 500 MiB)
+    if max_vram_ratio is not None and max_vram_ratio > 100:
+        if vram_margin is None:
+            vram_margin = int(max_vram_ratio)
+        max_vram_ratio = None
+
+    if max_vram_ratio is None:
+        effective_ratio = get_max_vram_ratio()
+    else:
+        if max_vram_ratio > 1.0:
+            effective_ratio = max(0.10, min(1.0, float(max_vram_ratio) / 100.0))
+        else:
+            effective_ratio = max(0.10, min(1.0, float(max_vram_ratio)))
+
     total_vram, _, _ = get_gpu_vram()
 
-    mmproj_size_mib = 0
+    mmproj_size_mib = 0.0
     if mmproj_path and os.path.exists(mmproj_path):
         base_size = os.path.getsize(mmproj_path) / (1024 * 1024)
         mmproj_size_mib = base_size * 3.0
-        vram_margin += 500
 
-    safe_vram_limit = total_vram - vram_margin - mmproj_size_mib
+    max_allowed_vram = total_vram * effective_ratio
+    safe_vram_limit = max_allowed_vram - mmproj_size_mib
+
+    if vram_margin is not None:
+        safe_vram_limit = min(safe_vram_limit, total_vram - vram_margin - mmproj_size_mib)
+
+    safe_vram_limit = max(0.0, safe_vram_limit)
 
     cache_types = [
         {"k": "f16", "v": "f16", "bytes": 2.0, "desc": "Standard (Uncompressed)"},
@@ -232,6 +313,7 @@ def find_optimal_config(model_path: str, target_ctx: int, vram_margin: int = DEF
             "model_properties": props,
             "best_config": best_config,
             "total_vram_mib": total_vram,
-            "safe_vram_limit": safe_vram_limit
+            "safe_vram_limit": safe_vram_limit,
+            "max_vram_percent": round(effective_ratio * 100.0, 1),
         }
     return None

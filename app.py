@@ -238,6 +238,17 @@ def start_llama_server_task(
             return False
 
         opt_config = opt_res["best_config"]
+        logger.info(
+            "[Optimizer] Target VRAM limit: %.1f MiB (%.1f%% of %d MiB total). Optimal: ngl=%d, ncmoe=%d, cache_k=%s, cache_v=%s, estimated vram=%.1f MiB",
+            opt_res["safe_vram_limit"],
+            opt_res.get("max_vram_percent", 95.0),
+            opt_res["total_vram_mib"],
+            opt_config["ngl"],
+            opt_config["ncmoe"],
+            opt_config["cache_k"],
+            opt_config["cache_v"],
+            opt_config["vram"],
+        )
         parent_dir = LLAMA_SERVER_EXE.parent
 
         # Build command
@@ -387,6 +398,7 @@ app.add_middleware(
 def get_status():
     """Returns worker status, VRAM telemetry, active model, and available models."""
     total, used, free = optimizer.get_gpu_vram()
+    max_ratio = optimizer.get_max_vram_ratio()
     gguf_models = get_available_gguf_models()
 
     with state_lock:
@@ -404,6 +416,8 @@ def get_status():
                 "total_mib": total,
                 "used_mib": used,
                 "free_mib": free,
+                "max_percent": round(max_ratio * 100.0, 1),
+                "max_limit_mib": round(total * max_ratio, 1),
             },
             "pid": state["process"].pid if state["process"] and state["process"].poll() is None else None,
         }
