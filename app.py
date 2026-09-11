@@ -58,6 +58,7 @@ LLAMA_SERVER_EXE = Path(os.getenv("LLAMA_SERVER_EXE", str(ROOT_DIR / "llama-serv
 LLAMA_SERVER_HOST = os.getenv("LLAMA_SERVER_HOST", "127.0.0.1")
 LLAMA_SERVER_PORT = int(os.getenv("LLAMA_SERVER_PORT", "8080"))
 LLAMA_BASE_URL = f"http://{LLAMA_SERVER_HOST}:{LLAMA_SERVER_PORT}"
+LLAMA_LOAD_MODE = os.getenv("LLAMA_LOAD_MODE", "mmap+mlock")
 
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434").rstrip("/")
 IDLE_TIMEOUT_SECONDS = int(os.getenv("IDLE_TIMEOUT_SECONDS", "300"))
@@ -228,7 +229,10 @@ def start_llama_server_task(
 
         # Optimize VRAM & layers
         opt_res = optimizer.find_optimal_config(
-            str(model_path), context_size, mmproj_path=str(mmproj_path) if mmproj_path else None
+            str(model_path),
+            context_size,
+            mmproj_path=str(mmproj_path) if mmproj_path else None,
+            llama_server_exe=str(LLAMA_SERVER_EXE),
         )
         if not opt_res:
             with state_lock:
@@ -260,8 +264,7 @@ def start_llama_server_task(
             "--cache-type-k", opt_config["cache_k"],
             "--cache-type-v", opt_config["cache_v"],
             "-c", str(context_size),
-            "--no-mmap",
-            "--mlock",
+            "--load-mode", LLAMA_LOAD_MODE,
             "--host", LLAMA_SERVER_HOST,
             "--port", str(LLAMA_SERVER_PORT),
         ]

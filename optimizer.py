@@ -3,8 +3,10 @@ VRAM Optimizer and GGUF Architecture Analyzer for MAIA Beacon.
 Calculates optimal GPU layer offloading and KV cache quantization based on available VRAM.
 """
 
+import json
 import os
 from pathlib import Path
+import re
 import struct
 import subprocess
 from typing import Optional, Union
@@ -115,17 +117,121 @@ def read_gguf_metadata(file_path: str):
     return metadata
 
 
-def get_gpu_vram():
-    """Returns (total_vram_mib, used_vram_mib, free_vram_mib) using nvidia-smi."""
+def get_gpu_vram(llama_server_exe: Optional[str] = None):
+    """
+    Returns (total_vram_mib, used_vram_mib, free_vram_mib) across NVIDIA, AMD, and Intel GPUs.
+    Tries querying via llama-server.exe --list-devices (Vulkan/CUDA/Kompute/SYCL).
+    Falls back to nvidia-smi, rocm-smi, xpu-smi, Windows WMI, or DRM sysfs on Linux.
+    Returns (0, 0, 0) if no GPU VRAM is detected.
+    """
+    # Try querying via llama-server --list-devices first (queries Vulkan/CUDA/Kompute memory directly)
+    llama_exe = llama_server_exe or os.getenv("LLAMA_SERVER_EXE")
+    if llama_exe and os.path.exists(llama_exe):
+        try:
+            cmd = [llama_exe, "--list-devices"]
+            res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=5.0)
+            if res.returncode == 0:
+                matches = re.findall(r"\((\d+)\s*MiB,\s*(\d+)\s*MiB free\)", res.stdout)
+                if matches:
+                    tot_mib = int(matches[0][0])
+                    free_mib = int(matches[0][1])
+                    used_mib = max(0, tot_mib - free_mib)
+                    if tot_mib > 0:
+                        return tot_mib, used_mib, free_mib
+        except Exception:
+            pass
+
+    # Try NVIDIA (nvidia-smi)
+    nvsmi_candidates = ["nvidia-smi"]
+    if os.name == "nt":
+        nvsmi_candidates.extend([
+            r"C:\Program Files\NVIDIA Corporation\NVSMI\nvidia-smi.exe",
+            r"C:\Windows\System32\nvidia-smi.exe",
+        ])
+    for nvsmi_bin in nvsmi_candidates:
+        try:
+            cmd = [nvsmi_bin, "--query-gpu=memory.total,memory.used,memory.free", "--format=csv,noheader,nounits"]
+            res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
+            parts = res.stdout.strip().split(",")
+            if len(parts) >= 3:
+                return int(parts[0].strip()), int(parts[1].strip()), int(parts[2].strip())
+        except Exception:
+            pass
+
+    # Try AMD (rocm-smi)
     try:
-        cmd = ["nvidia-smi", "--query-gpu=memory.total,memory.used,memory.free", "--format=csv,noheader,nounits"]
+        cmd = ["rocm-smi", "--showmeminfo", "vram", "--json"]
         res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
-        parts = res.stdout.strip().split(",")
-        if len(parts) >= 3:
-            return int(parts[0].strip()), int(parts[1].strip()), int(parts[2].strip())
-    except Exception as e:
-        print(f"Warning: Could not query VRAM via nvidia-smi: {e}")
-    return 12288, 0, 12288
+        data = json.loads(res.stdout)
+        for card_id, card_data in data.items():
+            tot = card_data.get("VRAM Total Memory (B)")
+            used = card_data.get("VRAM Total Used Memory (B)")
+            if tot and used:
+                tot_mib = int(int(tot) / (1024 * 1024))
+                used_mib = int(int(used) / (1024 * 1024))
+                return tot_mib, used_mib, max(0, tot_mib - used_mib)
+    except Exception:
+        pass
+
+    # Try Intel (xpu-smi)
+    try:
+        cmd = ["xpu-smi", "discovery", "-j"]
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
+        data = json.loads(res.stdout)
+        device_list = data if isinstance(data, list) else data.get("device_list", [])
+        for dev in device_list:
+            mem = dev.get("memory_physical_size_byte")
+            if mem and int(mem) > 0:
+                tot_mib = int(int(mem) / (1024 * 1024))
+                return tot_mib, 0, tot_mib
+    except Exception:
+        pass
+
+    # Try Linux sysfs DRM (AMD / Intel / NVIDIA Linux fallback)
+    if os.name != "nt" and os.path.exists("/sys/class/drm"):
+        try:
+            for card in sorted(os.listdir("/sys/class/drm")):
+                if not card.startswith("card"):
+                    continue
+                vram_file = os.path.join("/sys/class/drm", card, "device", "mem_info_vram_total")
+                if os.path.exists(vram_file):
+                    with open(vram_file, "r") as f:
+                        vram_bytes = int(f.read().strip())
+                        if vram_bytes > 0:
+                            tot_mib = int(vram_bytes / (1024 * 1024))
+                            return tot_mib, 0, tot_mib
+        except Exception:
+            pass
+
+    # Try Windows WMI / CIM (Generic for Intel Graphics, AMD, NVIDIA on Windows)
+    if os.name == "nt":
+        try:
+            cmd = [
+                "powershell",
+                "-NoProfile",
+                "-Command",
+                "Get-CimInstance Win32_VideoController | Select-Object Name, AdapterRAM | ConvertTo-Json",
+            ]
+            res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
+            if res.stdout.strip():
+                items = json.loads(res.stdout)
+                if isinstance(items, dict):
+                    items = [items]
+                for gpu in items:
+                    name = str(gpu.get("Name", ""))
+                    ram_bytes = gpu.get("AdapterRAM")
+                    # Ignore virtual display adapters (e.g. Parsec, spacedesk, RDP)
+                    if any(v in name.lower() for v in ["parsec", "spacedesk", "rdp", "virtual", "basic display"]):
+                        continue
+                    if ram_bytes and isinstance(ram_bytes, (int, float)) and ram_bytes > 0:
+                        tot_mib = int(ram_bytes / (1024 * 1024))
+                        if tot_mib > 0:
+                            return tot_mib, 0, tot_mib
+        except Exception as e:
+            print(f"Warning: Could not query VRAM via Windows WMI: {e}")
+
+    print("Warning: No GPU VRAM detected (NVIDIA/AMD/Intel). Defaulting to 0 MiB VRAM (CPU mode).")
+    return 0, 0, 0
 
 
 def extract_model_properties(model_path: str):
@@ -200,7 +306,8 @@ def find_optimal_config(
     target_ctx: int,
     max_vram_ratio: Optional[Union[float, int]] = None,
     mmproj_path: Optional[str] = None,
-    vram_margin: Optional[int] = None
+    vram_margin: Optional[int] = None,
+    llama_server_exe: Optional[str] = None,
 ):
     """Finds the optimal settings using mathematical simulation."""
     props = extract_model_properties(model_path)
@@ -208,7 +315,7 @@ def find_optimal_config(
         return None
 
     # Handle backward compatibility if 3rd positional argument was vram_margin (e.g. 500 MiB)
-    if max_vram_ratio is not None and max_vram_ratio > 100:
+    if isinstance(max_vram_ratio, (int, float)) and max_vram_ratio > 100:
         if vram_margin is None:
             vram_margin = int(max_vram_ratio)
         max_vram_ratio = None
@@ -216,12 +323,21 @@ def find_optimal_config(
     if max_vram_ratio is None:
         effective_ratio = get_max_vram_ratio()
     else:
-        if max_vram_ratio > 1.0:
-            effective_ratio = max(0.10, min(1.0, float(max_vram_ratio) / 100.0))
-        else:
-            effective_ratio = max(0.10, min(1.0, float(max_vram_ratio)))
+        try:
+            if isinstance(max_vram_ratio, str):
+                has_percent = "%" in max_vram_ratio
+                cleaned = max_vram_ratio.replace("%", "").strip()
+                val = float(cleaned)
+                effective_ratio = val / 100.0 if (has_percent or val > 1.0) else val
+            elif max_vram_ratio > 1.0:
+                effective_ratio = float(max_vram_ratio) / 100.0
+            else:
+                effective_ratio = float(max_vram_ratio)
+            effective_ratio = max(0.0, min(1.0, effective_ratio))
+        except (ValueError, TypeError):
+            effective_ratio = get_max_vram_ratio()
 
-    total_vram, _, _ = get_gpu_vram()
+    total_vram, _, _ = get_gpu_vram(llama_server_exe)
 
     mmproj_size_mib = 0.0
     if mmproj_path and os.path.exists(mmproj_path):
@@ -308,12 +424,21 @@ def find_optimal_config(
                 "vram": opt_vram
             }
 
-    if best_config:
-        return {
-            "model_properties": props,
-            "best_config": best_config,
-            "total_vram_mib": total_vram,
-            "safe_vram_limit": safe_vram_limit,
-            "max_vram_percent": round(effective_ratio * 100.0, 1),
+    if not best_config:
+        # Fallback to CPU-only execution (ngl=0) when no layers fit in VRAM or total_vram is 0
+        best_config = {
+            "ngl": 0,
+            "ncmoe": props["experts"] if props["is_moe"] else 0,
+            "cache_k": "f16",
+            "cache_v": "f16",
+            "speed": 5.0,
+            "vram": 0.0,
         }
-    return None
+
+    return {
+        "model_properties": props,
+        "best_config": best_config,
+        "total_vram_mib": total_vram,
+        "safe_vram_limit": safe_vram_limit,
+        "max_vram_percent": round(effective_ratio * 100.0, 1),
+    }
