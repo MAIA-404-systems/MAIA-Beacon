@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 680" width="100%" height="100%" style="background-color: #0d1117; font-family: system-ui, -apple-system, sans-serif;">
+  <style>
+    .title { fill: #58a6ff; font-size: 20px; font-weight: bold; }
+    .box-title { fill: #c9d1d9; font-size: 14px; font-weight: bold; }
+    .sub-title { fill: #8b949e; font-size: 12px; }
+    .node-text { fill: #f0f6fc; font-size: 13px; font-weight: 600; }
+    .node-sub { fill: #8b949e; font-size: 11px; }
+    .edge-text { fill: #79c0ff; font-size: 11px; font-weight: 500; }
+    .box-bg { fill: #161b22; stroke: #30363d; stroke-width: 1.5; rx: 8; }
+    .container-bg { fill: #0d1117; stroke: #388bfd; stroke-width: 2; stroke-dasharray: 4; rx: 12; }
+    .node-api { fill: #1f6feb; stroke: #58a6ff; stroke-width: 1.5; rx: 6; }
+    .node-core { fill: #238636; stroke: #3fb950; stroke-width: 1.5; rx: 6; }
+    .node-engine { fill: #8957e5; stroke: #a371f7; stroke-width: 1.5; rx: 6; }
+    .node-opt { fill: #9e6a03; stroke: #d29922; stroke-width: 1.5; rx: 6; }
+    .node-hw { fill: #da3633; stroke: #f85149; stroke-width: 1.5; rx: 6; }
+    .line { stroke: #58a6ff; stroke-width: 2; marker-end: url(#arrow); }
+    .line-gpu { stroke: #a371f7; stroke-width: 2; marker-end: url(#arrow-purple); }
+    .line-npu { stroke: #3fb950; stroke-width: 2; marker-end: url(#arrow-green); }
+  </style>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#58a6ff" />
+    </marker>
+    <marker id="arrow-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#a371f7" />
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#3fb950" />
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <text x="450" y="35" text-anchor="middle" class="title">MAIA Beacon - Architecture &amp; Composants Systemes</text>
+
+  <!-- Client -->
+  <rect x="330" y="60" width="240" height="45" class="node-api" />
+  <text x="450" y="87" text-anchor="middle" class="node-text">Client MAIA_API (HTTP Client)</text>
+
+  <!-- Outer Container -->
+  <rect x="40" y="145" width="820" height="370" class="container-bg" />
+  <text x="60" y="170" class="box-title">MAIA Beacon Worker Node (0.0.0.0:11343)</text>
+
+  <!-- API Layer -->
+  <rect x="60" y="190" width="230" height="90" class="box-bg" />
+  <text x="75" y="212" class="sub-title">Couche API (FastAPI)</text>
+  <rect x="75" y="222" width="200" height="45" class="node-api" />
+  <text x="175" y="242" text-anchor="middle" class="node-text">api/routes.py</text>
+  <text x="175" y="257" text-anchor="middle" class="node-sub">Endpoints /api/* &amp; /v1/*</text>
+
+  <!-- Config -->
+  <rect x="610" y="190" width="220" height="90" class="box-bg" />
+  <text x="625" y="212" class="sub-title">Configuration</text>
+  <rect x="625" y="222" width="190" height="45" class="node-opt" />
+  <text x="720" y="248" text-anchor="middle" class="node-text">config.py</text>
+
+  <!-- Core Layer (Manager) -->
+  <rect x="330" y="190" width="240" height="110" class="box-bg" />
+  <text x="345" y="212" class="sub-title">Orchestrateur Central</text>
+  <rect x="345" y="222" width="210" height="65" class="node-core" />
+  <text x="450" y="248" text-anchor="middle" class="node-text">engines/manager.py</text>
+  <text x="450" y="266" text-anchor="middle" class="node-sub">EngineManager Singleton &amp; Watchdog</text>
+
+  <!-- Engine Layer -->
+  <rect x="60" y="325" width="770" height="170" class="box-bg" />
+  <text x="75" y="348" class="sub-title">Moteurs d'Inference (Engine Providers)</text>
+
+  <!-- Llama Engine -->
+  <rect x="85" y="360" width="330" height="115" class="node-engine" />
+  <text x="250" y="388" text-anchor="middle" class="node-text">engines/llama_engine.py</text>
+  <text x="250" y="410" text-anchor="middle" class="node-sub">Moteur GPU &amp; CPU (GGUF / Turboquant)</text>
+  <text x="250" y="428" text-anchor="middle" class="node-sub">Sous-processus llama-server.exe &amp; Reverse Proxy</text>
+  <text x="250" y="446" text-anchor="middle" class="node-sub">Optimisation NGL &amp; KV Cache VRAM</text>
+
+  <!-- NPU Engine -->
+  <rect x="475" y="360" width="330" height="115" class="node-core" />
+  <text x="640" y="388" text-anchor="middle" class="node-text">engines/npu_engine.py</text>
+  <text x="640" y="410" text-anchor="middle" class="node-sub">Moteur NPU (Intel AI Boost via OpenVINO GenAI)</text>
+  <text x="640" y="428" text-anchor="middle" class="node-sub">LLMPipeline compilation &amp; inference NPU</text>
+  <text x="640" y="446" text-anchor="middle" class="node-sub">Streaming SSE inter-thread (asyncio.Queue)</text>
+
+  <!-- Hardware Layer -->
+  <rect x="40" y="555" width="820" height="95" class="box-bg" />
+  <text x="60" y="578" class="box-title">Ressources Materielles (Hardware Layer)</text>
+
+  <rect x="85" y="590" width="330" height="45" class="node-hw" />
+  <text x="250" y="617" text-anchor="middle" class="node-text">GPU (NVIDIA RTX / Vulkan + llama-server)</text>
+
+  <rect x="475" y="590" width="330" height="45" class="node-hw" />
+  <text x="640" y="617" text-anchor="middle" class="node-text">NPU (Intel AI Boost NPU + OpenVINO IR)</text>
+
+  <!-- Arrows -->
+  <path d="M 450 105 L 450 180" class="line" />
+  <path d="M 290 245 L 330 245" class="line" />
+  <path d="M 570 245 L 610 245" class="line" />
+  
+  <path d="M 400 300 L 250 355" class="line-purple" />
+  <path d="M 500 300 L 640 355" class="line-npu" />
+
+  <path d="M 250 475 L 250 585" class="line-purple" />
+  <path d="M 640 475 L 640 585" class="line-npu" />
+</svg>

@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 480" width="100%" height="100%" style="background-color: #0d1117; font-family: system-ui, -apple-system, sans-serif;">
+  <style>
+    .title { fill: #58a6ff; font-size: 20px; font-weight: bold; }
+    .state-node { fill: #161b22; stroke: #58a6ff; stroke-width: 2; rx: 20; }
+    .state-active { fill: #238636; stroke: #3fb950; stroke-width: 2; rx: 20; }
+    .state-error { fill: #da3633; stroke: #f85149; stroke-width: 2; rx: 20; }
+    .state-sleep { fill: #8957e5; stroke: #a371f7; stroke-width: 2; rx: 20; }
+    .node-title { fill: #f0f6fc; font-size: 15px; font-weight: bold; }
+    .edge-line { stroke: #58a6ff; stroke-width: 2; marker-end: url(#arrow); }
+    .edge-text { fill: #79c0ff; font-size: 12px; font-weight: bold; }
+    .start-circle { fill: #58a6ff; }
+  </style>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#58a6ff" />
+    </marker>
+  </defs>
+
+  <text x="450" y="35" text-anchor="middle" class="title">MAIA Beacon - Machine a Etats du Worker Node</text>
+
+  <!-- Start -->
+  <circle cx="80" cy="240" r="16" class="start-circle" />
+  <path d="M 96 240 L 145 240" class="edge-line" />
+
+  <!-- Idle -->
+  <rect x="150" y="210" width="130" height="60" class="state-node" />
+  <text x="215" y="245" text-anchor="middle" class="node-title">idle</text>
+
+  <!-- Starting -->
+  <rect x="360" y="210" width="140" height="60" class="state-node" />
+  <text x="430" y="245" text-anchor="middle" class="node-title">starting</text>
+
+  <!-- Running -->
+  <rect x="610" y="210" width="140" height="60" class="state-active" />
+  <text x="680" y="245" text-anchor="middle" class="node-title">running</text>
+
+  <!-- Sleeping -->
+  <rect x="360" y="370" width="140" height="60" class="state-sleep" />
+  <text x="430" y="405" text-anchor="middle" class="node-title">sleeping</text>
+
+  <!-- Error -->
+  <rect x="360" y="80" width="140" height="60" class="state-error" />
+  <text x="430" y="115" text-anchor="middle" class="node-title">error</text>
+
+  <!-- Transitions -->
+  <!-- idle -> starting -->
+  <path d="M 280 240 L 350 240" class="edge-line" />
+  <text x="315" y="230" text-anchor="middle" class="edge-text">select / infer</text>
+
+  <!-- starting -> running -->
+  <path d="M 500 240 L 600 240" class="edge-line" />
+  <text x="550" y="230" text-anchor="middle" class="edge-text">Modèle prêt</text>
+
+  <!-- starting -> error -->
+  <path d="M 430 210 L 430 150" class="edge-line" />
+  <text x="435" y="180" class="edge-text">Échec chargement</text>
+
+  <!-- running -> sleeping -->
+  <path d="M 680 270 L 680 400 L 510 400" class="edge-line" />
+  <text x="680" y="340" text-anchor="middle" class="edge-text">Inactivité > 300s (Watchdog)</text>
+
+  <!-- sleeping -> starting -->
+  <path d="M 430 370 L 430 280" class="edge-line" />
+  <text x="435" y="330" class="edge-text">Nouvelle requête</text>
+
+  <!-- running -> idle (stop) -->
+  <path d="M 680 210 L 680 150 L 215 150 L 215 200" class="edge-line" />
+  <text x="450" y="140" text-anchor="middle" class="edge-text">POST /api/stop</text>
+
+</svg>

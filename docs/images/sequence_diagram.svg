@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 950 680" width="100%" height="100%" style="background-color: #0d1117; font-family: system-ui, -apple-system, sans-serif;">
+  <style>
+    .title { fill: #58a6ff; font-size: 20px; font-weight: bold; }
+    .actor-box { fill: #161b22; stroke: #58a6ff; stroke-width: 1.5; rx: 6; }
+    .actor-text { fill: #f0f6fc; font-size: 13px; font-weight: bold; }
+    .lifeline { stroke: #30363d; stroke-width: 1.5; stroke-dasharray: 4; }
+    .msg-line { stroke: #58a6ff; stroke-dasharray: 0; stroke-width: 1.5; marker-end: url(#arrow); }
+    .msg-reply { stroke: #79c0ff; stroke-dasharray: 4; stroke-width: 1.5; marker-end: url(#arrow-reply); }
+    .msg-gpu { stroke: #a371f7; stroke-width: 1.5; marker-end: url(#arrow-purple); }
+    .msg-npu { stroke: #3fb950; stroke-width: 1.5; marker-end: url(#arrow-green); }
+    .msg-text { fill: #c9d1d9; font-size: 12px; }
+    .alt-box { fill: #161b22; stroke: #d29922; stroke-width: 1; stroke-dasharray: 2; rx: 4; }
+    .alt-header { fill: #d29922; font-size: 11px; font-weight: bold; }
+  </style>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#58a6ff" />
+    </marker>
+    <marker id="arrow-reply" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#79c0ff" />
+    </marker>
+    <marker id="arrow-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#a371f7" />
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#3fb950" />
+    </marker>
+  </defs>
+
+  <text x="475" y="35" text-anchor="middle" class="title">MAIA Beacon - Flux d'Inference &amp; Routage Dynamique</text>
+
+  <!-- Actors Header -->
+  <g transform="translate(40, 60)">
+    <rect x="0" y="0" width="120" height="40" class="actor-box" />
+    <text x="60" y="25" text-anchor="middle" class="actor-text">Client HTTP</text>
+
+    <rect x="180" y="0" width="130" height="40" class="actor-box" />
+    <text x="245" y="25" text-anchor="middle" class="actor-text">api/routes.py</text>
+
+    <rect x="370" y="0" width="150" height="40" class="actor-box" />
+    <text x="445" y="25" text-anchor="middle" class="actor-text">engines/manager.py</text>
+
+    <rect x="580" y="0" width="150" height="40" class="actor-box" />
+    <text x="655" y="25" text-anchor="middle" class="actor-text">llama_engine (GPU)</text>
+
+    <rect x="780" y="0" width="140" height="40" class="actor-box" />
+    <text x="850" y="25" text-anchor="middle" class="actor-text">npu_engine (NPU)</text>
+  </g>
+
+  <!-- Lifelines -->
+  <line x1="100" y1="100" x2="100" y2="640" class="lifeline" />
+  <line x1="285" y1="100" x2="285" y2="640" class="lifeline" />
+  <line x1="445" y1="100" x2="445" y2="640" class="lifeline" />
+  <line x1="655" y1="100" x2="655" y2="640" class="lifeline" />
+  <line x1="850" y1="100" x2="850" y2="640" class="lifeline" />
+
+  <!-- Messages -->
+  <!-- 1 -->
+  <path d="M 100 130 L 280 130" class="msg-line" />
+  <text x="190" y="123" text-anchor="middle" class="msg-text">1. POST /v1/chat/completions</text>
+
+  <!-- 2 -->
+  <path d="M 285 160 L 440 160" class="msg-line" />
+  <text x="362" y="153" text-anchor="middle" class="msg-text">2. handle_chat_completions()</text>
+
+  <!-- 3 self -->
+  <path d="M 445 185 L 490 185 L 490 205 L 450 205" class="msg-line" />
+  <text x="500" y="200" class="msg-text">3. detect_engine(model)</text>
+
+  <!-- ALT GPU -->
+  <rect x="50" y="225" width="850" height="190" class="alt-box" />
+  <text x="65" y="242" class="alt-header">ALT [Moteur GPU / GGUF]</text>
+
+  <path d="M 445 265 L 650 265" class="msg-gpu" />
+  <text x="547" y="258" text-anchor="middle" class="msg-text">4a. proxy_to_llama_server()</text>
+
+  <path d="M 655 295 L 720 295 L 720 315 L 660 315" class="msg-gpu" />
+  <text x="725" y="310" class="msg-text">Demarrage llama-server.exe &amp; Healthcheck</text>
+
+  <path d="M 655 350 L 105 350" class="msg-reply" />
+  <text x="380" y="343" text-anchor="middle" class="msg-text">5a. Streaming SSE (data: chunk) via llama-server</text>
+
+  <!-- ALT NPU -->
+  <rect x="50" y="435" width="850" height="180" class="alt-box" />
+  <text x="65" y="452" class="alt-header">ALT [Moteur NPU / OpenVINO IR]</text>
+
+  <path d="M 445 475 L 845 475" class="msg-npu" />
+  <text x="645" y="468" text-anchor="middle" class="msg-text">4b. load_npu_model() &amp; generate_npu()</text>
+
+  <path d="M 850 505 L 900 505 L 900 525 L 855 525" class="msg-npu" />
+  <text x="905" y="520" class="msg-text">LLMPipeline NPU &amp; Streamer</text>
+
+  <path d="M 850 560 L 105 560" class="msg-reply" />
+  <text x="477" y="553" text-anchor="middle" class="msg-text">5b. Streaming SSE (data: chunk) via Intel NPU</text>
+
+</svg>
