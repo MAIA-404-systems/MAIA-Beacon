@@ -1,4 +1,4 @@
-# MAIA Beacon — GPU & NPU Worker Node
+# MAIA Beacon - GPU & NPU Worker Node
 
 **MAIA Beacon** est un agent autonome et léger conçu pour s'exécuter sur les machines disposant de GPU (NVIDIA RTX, Apple Silicon) ou de NPU (Intel AI Boost via OpenVINO GenAI) afin d'héberger, gérer et exécuter dynamiquement des modèles d'IA locaux pour le réseau **MAIA_API**.
 
@@ -49,3 +49,19 @@ Le serveur démarrera et écoutera par défaut sur le port `11343`.
 * [Architecture Technique](docs/ARCHITECTURE.md) : Vue d'ensemble du découplage modulaire et de l'orchestration GPU / NPU.
 * [Diagrammes UML & Séquences](docs/UML_DIAGRAMS.md) : Diagrammes de composants, classes, séquences et machine à états (Mermaid).
 * [Spécification des API REST](docs/API_REFERENCE.md) : Référence complète des endpoints `/api/*` et `/v1/*`.
+
+---
+
+## Remerciements et Mentions
+
+* **llama.cpp** : Le moteur d'inférence.
+* **[Fork turboquant de llama.cpp de TheTom](https://github.com/TheTom/llama-cpp-turboquant)** : Version modifiée pour inclure des optimisations.
+* **[TurboQuant de Google](https://research.google/blog/turboquant-redefining-ai-efficiency-with-extreme-compression/)** : Technologie intégrée.
+* **Tutoriel YouTube de Codacus** : [Vidéo de référence](https://youtu.be/8F_5pdcD3HY).
+* Une partie du code de ce projet a été générée à l'aide de **Google Gemini** via le logiciel **Antigravity**.
+
+---
+
+## Licence
+
+Ce projet est sous licence **Apache License 2.0**. Voir le fichier [LICENSE](LICENSE) pour plus de détails.
