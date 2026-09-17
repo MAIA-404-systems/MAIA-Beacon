@@ -6,6 +6,7 @@ Manages local GGUF models, VRAM optimization, process lifecycle, and HTTP proxyi
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 from pathlib import Path
@@ -20,6 +21,7 @@ import httpx
 import psutil
 
 import engines.gguf_parser as gguf_parser
+import engines.npu_engine as npu_engine
 
 logger = logging.getLogger("maia.beacon.llama")
 
@@ -297,6 +299,7 @@ async def proxy_to_llama_server(
     while True:
         with state_lock:
             cur_status = state["status"]
+            cur_engine = state.get("active_engine")
             cur_model = state["active_model"]
             cur_ctx = state["active_context"] or 16384
             cur_think = state["active_thinking"]
@@ -329,6 +332,8 @@ async def proxy_to_llama_server(
         )
         with state_lock:
             cur_status = state["status"]
+            cur_engine = state.get("active_engine")
+            cur_model = state.get("active_model")
 
     requested_model = str(json_data.get("model", ""))
     if requested_model.lower().endswith(".gguf"):
@@ -342,11 +347,24 @@ async def proxy_to_llama_server(
         elif len(requested_model) > 5 and (requested_model.lower() in m.lower() or m.lower() in requested_model.lower()):
             matched_req = m
 
-    if cur_status == "idle" and matched_req:
-        logger.info("[*] Auto-starting requested GGUF model '%s' on GPU...", matched_req)
-        await asyncio.to_thread(
+    target_to_start = matched_req or cur_model or (avail[0] if avail else None)
+
+    need_start = False
+    if cur_status != "running" or cur_engine != "llama-server":
+        need_start = True
+    elif matched_req and cur_model and cur_model.lower() != matched_req.lower():
+        need_start = True
+
+    if need_start:
+        if not target_to_start:
+            raise HTTPException(status_code=404, detail="No GGUF models available to start llama-server.")
+
+        npu_engine.unload_npu_model()
+
+        logger.info("[*] Auto-starting requested GGUF model '%s' on GPU (previous engine: '%s')...", target_to_start, cur_engine)
+        success = await asyncio.to_thread(
             start_llama_server_task,
-            matched_req,
+            target_to_start,
             16384,
             False,
             "medium",
@@ -360,6 +378,9 @@ async def proxy_to_llama_server(
             state_lock,
             startup_lock,
         )
+        if not success:
+            raise HTTPException(status_code=500, detail=f"Failed to start llama-server for model '{target_to_start}'")
+
         with state_lock:
             cur_status = state["status"]
 
@@ -375,23 +396,32 @@ async def proxy_to_llama_server(
 
     if is_stream:
         async def stream_generator() -> AsyncGenerator[bytes, None]:
+            try:
+                async with httpx.AsyncClient(timeout=300.0) as client:
+                    async with client.stream(
+                        method=request.method,
+                        url=url,
+                        headers=headers,
+                        json=json_data,
+                    ) as resp:
+                        async for chunk in resp.aiter_bytes():
+                            yield chunk
+            except (httpx.ConnectError, httpx.RequestError) as exc:
+                logger.error("[llama-server] Proxy streaming connection error: %s", exc)
+                err_payload = json.dumps({"error": {"message": f"Connection to llama-server failed: {exc}", "type": "connect_error"}})
+                yield f"data: {err_payload}\n\n".encode("utf-8")
+
+        return StreamingResponse(stream_generator(), media_type="text/event-stream")
+    else:
+        try:
             async with httpx.AsyncClient(timeout=300.0) as client:
-                async with client.stream(
+                resp = await client.request(
                     method=request.method,
                     url=url,
                     headers=headers,
                     json=json_data,
-                ) as resp:
-                    async for chunk in resp.aiter_bytes():
-                        yield chunk
-
-        return StreamingResponse(stream_generator(), media_type="text/event-stream")
-    else:
-        async with httpx.AsyncClient(timeout=300.0) as client:
-            resp = await client.request(
-                method=request.method,
-                url=url,
-                headers=headers,
-                json=json_data,
-            )
-            return Response(content=resp.content, status_code=resp.status_code, media_type=resp.headers.get("content-type"))
+                )
+                return Response(content=resp.content, status_code=resp.status_code, media_type=resp.headers.get("content-type"))
+        except (httpx.ConnectError, httpx.RequestError) as exc:
+            logger.error("[llama-server] Proxy connection error: %s", exc)
+            raise HTTPException(status_code=503, detail=f"Connection to llama-server failed: {exc}")

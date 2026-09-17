@@ -1,7 +1,6 @@
 """
 MAIA Beacon - Central Engine Manager & Model Orchestrator.
 Encapsulates global worker state, inactivity watchdog, model discovery, and request dispatching.
-No Ollama dependencies - dedicated to GPU/CPU (llama-server) and Intel NPU (OpenVINO).
 """
 
 from __future__ import annotations
@@ -66,7 +65,7 @@ class EngineManager:
             return "npu"
         return "llama"
 
-    # --- Engine Lifecycle Management ---
+    # Engine Lifecycle Management
 
     def stop_all(self) -> None:
         """Stops all running processes and unloads models to release all VRAM/RAM."""
